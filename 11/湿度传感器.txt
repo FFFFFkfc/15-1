@@ -134,5 +134,62 @@ void loop()
 
     Blinker.delay(2000);
 }
+#include <Blinker.h> 
+#include <DHT.h> 
 
+#define DHTPIN 8      // DHT 传感器连接的数字引脚
+#define DHTTYPE DHT11 // DHT 传感器型号为 DHT11 
+const int analogPin = A0; //土壤湿度传感器连接的模拟引脚
+
+DHT dht(DHTPIN, DHTTYPE); // 创建 DHT11 对象 
+
+char auth[] = "Your_Auth_Key"; // 替换为你的 Auth Key
+char ssid[] = "Your_SSID";    // 替换为你的WiFi名称
+char pswd[] = "Your_PASS";    // 替换为你的WiFi密码
+
+void setup() {
+  Serial.begin(115200);
+  Blinker.begin(auth, ssid, pswd); 
+  dht.begin(); // 启动 DHT11 传感器 
+}
+
+void loop() {
+  float h = dht.readHumidity();     // 读取湿度值
+  float t = dht.readTemperature(); // 读取温度值
+  if (isnan(h) || isnan(t)) {
+    Serial.println("读取 DHT11 传感器数据失败 !");
+    return;
+  }
+  Serial.print("湿度：");
+  Serial.print(h);
+  Serial.print("%，温度：");
+  Serial.print(t);
+  Serial.println("℃");
+
+  //从传感器读取模拟数据
+  int sensorValue = analogRead(analogPin);
+  //转换为电压
+  float voltage = sensorValue * (5.0 / 1023.0);
+  //转换为湿度
+  float soilMoisture = (voltage - 0.5) * 100.0 / 4.0; 
+  //输出湿度值
+  Serial.print("土壤湿度值：");
+  Serial.print(soilMoisture);
+  Serial.println("%");
+  //延时1分钟，再次读取
+  delay(60000);
+  
+  Blinker.vibrate(); //设备振动反馈
+  
+  Blinker MIOT_HUMI("humi");      // 实例化 Blinker 湿度对象 
+  Blinker MIOT_TEMP("temp");      // 实例化 Blinker 温度对象 
+  Blinker MIOT_SMOIS("smois");    // 实例化 Blinker 土壤湿度对象
+
+  MIOT_HUMI.print(h);   // 向 Blinker 服务端更新湿度值
+  MIOT_TEMP.print(t);   // 向 Blinker 服务端更新温度值
+  MIOT_SMOIS.print(soilMoisture);   //向Blinker 服务端更新土壤湿度值
+
+  Blinker.run();    // 运行 Blinker 服务
+  delay(1000);      // 每隔 1 秒钟更新一次传感器数据
+}
 
