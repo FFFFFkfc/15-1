@@ -1,136 +1,59 @@
 
-int DHpin = 8; 
-byte dat[5]; 
-byte read_data(){
-  byte data;
-  for(int i=0; i<8; i++){
-    if(digitalRead(DHpin) == LOW){
-      while(digitalRead(DHpin) == LOW); //等待 50us；
-      delayMicroseconds(30);  //判断高电平的持续时间，以判定数据是‘0’还是‘1’； if(digitalRead(DHpin) == HIGH)
-      data |= (1<<(7-i)); //高位在前，低位在后；
-      while(digitalRead(DHpin) == HIGH);  //数据‘1’，等待下一位的接收；
-    }
-  }
-  return data;
+#include <Blinker.h> 
+#include <DHT.h> 
+
+#define DHTPIN 8      // DHT 传感器连接的数字引脚
+#define DHTTYPE DHT11 // DHT 传感器型号为 DHT11 
+const int analogPin = A0; //土壤湿度传感器连接的模拟引脚
+
+DHT dht(DHTPIN, DHTTYPE); // 创建 DHT11 对象 
+
+char auth[] = "Your_Auth_Key"; // 替换为你的 Auth Key
+char ssid[] = "Your_SSID";    // 替换为你的WiFi名称
+char pswd[] = "Your_PASS";    // 替换为你的WiFi密码
+
+void setup() {
+  Serial.begin(115200);
+  Blinker.begin(auth, ssid, pswd); 
+  dht.begin(); // 启动 DHT11 传感器 
 }
 
-void start_test()
-{
-  digitalWrite(DHpin,LOW);  //拉低总线，发开始信号； delay(30); //延时要大于 18ms，以便 DHT11 能检测到开始信号； digitalWrite(DHpin,HIGH);
-  delayMicroseconds(40);  //等待DHT11 响应； pinMode(DHpin,INPUT); while(digitalRead(DHpin) == HIGH);
-  delayMicroseconds(80);  //DHT11 发出响应，拉低总线 80us； if(digitalRead(DHpin) == LOW);
-  delayMicroseconds(80);  //DHT11 拉高总线 80us 后开始发送数据；
-  for(int i=0;i<4;i++)  //接收温湿度数据，校验位不考虑； dat[i] = read_data();
-  pinMode(DHpin,OUTPUT);
-  digitalWrite(DHpin,HIGH); //发送完一次数据后释放总线，等待主机的下一次开始信号；
-}
+void loop() {
+  float h = dht.readHumidity();     // 读取湿度值
+  float t = dht.readTemperature(); // 读取温度值
+  if (isnan(h) || isnan(t)) {
+    Serial.println("读取 DHT11 传感器数据失败 !");
+    return;
+  }
+  Serial.print("湿度：");
+  Serial.print(h);
+  Serial.print("%，温度：");
+  Serial.print(t);
+  Serial.println("℃");
 
-void setup()
-{
-  Serial.begin(9600); pinMode(DHpin,OUTPUT);
-}
+  //从传感器读取模拟数据
+  int sensorValue = analogRead(analogPin);
+  //转换为电压
+  float voltage = sensorValue * (5.0 / 1023.0);
+  //转换为湿度
+  float soilMoisture = (voltage - 0.5) * 100.0 / 4.0; 
+  //输出湿度值
+  Serial.print("土壤湿度值：");
+  Serial.print(soilMoisture);
+  Serial.println("%");
+  //延时1分钟，再次读取
+  delay(60000);
+  
+  Blinker.vibrate(); //设备振动反馈
+  
+  Blinker MIOT_HUMI("humi");      // 实例化 Blinker 湿度对象 
+  Blinker MIOT_TEMP("temp");      // 实例化 Blinker 温度对象 
+  Blinker MIOT_SMOIS("smois");    // 实例化 Blinker 土壤湿度对象
 
-void loop()
+  MIOT_HUMI.print(h);   // 向 Blinker 服务端更新湿度值
+  MIOT_TEMP.print(t);   // 向 Blinker 服务端更新温度值
+  MIOT_SMOIS.print(soilMoisture);   //向Blinker 服务端更新土壤湿度值
 
-{
-  start_test();
-  
-  Serial.print("Current humdity = "); Serial.print(dat[0], DEC);  //显示湿度的整数位； Serial.print('.');
-  Serial.print(dat[1],DEC); //显示湿度的小数位； Serial.println('%');
-  Serial.print("Current temperature = "); Serial.print(dat[2], DEC);  //显示温度的整数位； Serial.print('.');
-  Serial.print(dat[3],DEC); //显示温度的小数位； Serial.println('C');
-  delay(700);
-}
-
-
-#define BLINKER_WIFI
-#define BLINKER_MIOT_SENSOR
-
-#include <Blinker.h>
-// REQUIRES the following Arduino libraries:
-// - DHT Sensor Library: https://github.com/adafruit/DHT-sensor-library
-// - Adafruit Unified Sensor Lib: https://github.com/adafruit/Adafruit_Sensor
-#include <DHT.h>
-//自行修改下面三行
-char auth[] = "密钥";
-char ssid[] = "ssid";
-char pswd[] = "key";
-
-BlinkerNumber HUMI("humi");
-BlinkerNumber TEMP("temp");
-
-#define DHTPIN 6  //io06(开发板上印着呢）
-
-#define DHTTYPE DHT11   // DHT 11
-//#define DHTTYPE DHT22   // DHT 22  (AM2302), AM2321
-//#define DHTTYPE DHT21   // DHT 21 (AM2301)
-
-DHT dht(DHTPIN, DHTTYPE);
-
-int humi_read = 0, temp_read = 0;
-
-void heartbeat()
-{
-    HUMI.print(humi_read);
-    TEMP.print(temp_read);
-}
-
-void dataStorage()
-{
-    Blinker.dataStorage("temp", temp_read);
-    Blinker.dataStorage("humi", humi_read);
-}
-
-void miotQuery(int32_t queryCode)
-{
-    BLINKER_LOG("MIOT Query codes: ", queryCode);
-
-    switch (queryCode)
-    {
-        case BLINKER_CMD_QUERY_ALL_NUMBER :
-            BLINKER_LOG("MIOT Query All");
-            BlinkerMIOT.temp(temp_read);
-            BlinkerMIOT.humi(humi_read);
-            BlinkerMIOT.print();
-            break;
-        default :
-            BlinkerMIOT.temp(20);
-            BlinkerMIOT.humi(20);
-            break;
-    }
-}
-
-void setup()
-{
-    Serial.begin(115200);
-    BLINKER_DEBUG.stream(Serial);
-    BLINKER_DEBUG.debugAll();
-    //pinMode(LED_BUILTIN, OUTPUT);
-    //digitalWrite(LED_BUILTIN, LOW);
-
-    Blinker.begin(auth, ssid, pswd);
-    Blinker.attachHeartbeat(heartbeat);
-    Blinker.attachDataStorage(dataStorage);
-    BlinkerMIOT.attachQuery(miotQuery);
-    dht.begin();
-}
-
-void loop()
-{
-    Blinker.run();
-
-    int h = dht.readHumidity();
-    int t = dht.readTemperature();
-
-    if (isnan(h) || isnan(t))
-    {
-        BLINKER_LOG("Failed to read from DHT sensor!");
-    }
-    else
-    {
-        humi_read = h;
-        temp_read = t;
-    }
-
-    Blinker.delay(2000);
+  Blinker.run();    // 运行 Blinker 服务
+  delay(1000);      // 每隔 1 秒钟更新一次传感器数据
 }
